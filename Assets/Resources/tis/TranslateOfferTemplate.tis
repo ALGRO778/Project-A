@@ -1,0 +1,82 @@
+var translateOfferLanguage;
+var OFFER_DEFAULT_LANGUAGE = "en";
+
+function TranslateOfferElements(resources) {
+    var elementsToTranslate = self.select("#Body1");
+
+    try {
+        elementsToTranslate.html = TranslateOfferElementsWithHTML(resources, elementsToTranslate);
+    }
+    catch (err) {
+        throw new Error("Unexpected error while translating : " + err);
+    }
+}
+
+// Translates the whole HTML with the new text depending on the "translateOfferLanguage"
+function TranslateOfferElementsWithHTML(resources, htmlToTranslate) {
+    var resourceSetToApply;
+    var translatedHtml;
+
+    try {
+
+        resourceSetToApply = LoadOfferResources(resources)
+
+        for (var resource in resourceSetToApply.resourceValues) {
+
+            // Matches anything that has "${{ResourceKey}}"
+            var regexp = htmlToTranslate.match("\\$\\{\\{" + resource.key + "\\}\\}")
+
+            if (regexp && htmlToTranslate.search(regexp) != -1) {
+                htmlToTranslate = htmlToTranslate.replace(regexp, resource.value);
+            }
+
+        }
+
+        translatedHtml = htmlToTranslate;
+    }
+    catch (err) {
+        throw new Error("Unexpected error while translating : " + err);
+    }
+
+    return translatedHtml;
+}
+
+// Validates the current Language and sets up the resources to use.
+function LoadOfferResources(resources) {
+    var currentLanguage;
+    var resourceSetToApply;
+
+    if (translateOfferLanguage) {
+        currentLanguage = translateOfferLanguage;
+    }
+    else {
+        currentLanguage = OFFER_DEFAULT_LANGUAGE;
+    }
+
+
+    for (var resourceSet in resources) {
+
+        if (resourceSet.lang == currentLanguage) {
+            resourceSetToApply = resourceSet;
+            break;
+        }
+    }
+
+    // If we cannot find the resourceSet for the currentLangue, Use DEFAULT_LANGUAGE.
+    if (!resourceSetToApply) {
+        for (var resourceSet in resources) {
+
+            if (resourceSet.lang == OFFER_DEFAULT_LANGUAGE) {
+                resourceSetToApply = resourceSet;
+                break;
+            }
+        }
+    }
+
+    return resourceSetToApply;
+}
+
+// Sets the language to use for translating the Offer.
+async function SetTranslateOfferLanguage(language) {
+    translateOfferLanguage = language;
+}

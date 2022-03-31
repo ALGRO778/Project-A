@@ -1,0 +1,43 @@
+class Log {
+
+    var _fileName;
+
+    function this(){
+
+        // This needs to be fixed, by the moment __FOLDER__ + "sciterlog.txt" is not working
+        // Despite of it is the way that Sciter suggest to do it with Stream.openFile.
+        // https://sciter.com/docs/content/script/Stream.htm
+
+        //_fileName = __FOLDER__ + "sciterlog.txt";
+        _fileName = "C:/Temp/sciterlog.txt";
+
+    }
+
+    function Info(text) {
+
+        var stream;
+
+        try {
+
+            stream = Stream.openFile(_fileName, "r");
+
+            if (stream == null){
+                stream = Stream.openFile(_fileName, "w+");
+            } else {
+                stream = Stream.openFile(_fileName, "a+");
+            }
+
+            stream.println(new Date().toString("%F %X") + " [INFO] " + text);
+
+        } catch (e) {
+            view.msgbox(#alert, e);
+        }
+        finally {
+
+            if (stream != null){
+                stream.close();
+            }
+
+        }
+    }
+}

@@ -1,0 +1,3 @@
+view.windowResizable = false;
+view.windowMaximizable = false;
+view.windowIcon = self.url("app.ico");

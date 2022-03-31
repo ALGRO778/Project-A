@@ -1,0 +1,369 @@
+include "resources/tis/config.tis";
+include "resources/tis/ViewStateLoader.tis";
+include "resources/tis/TranslateOfferTemplate.tis";
+include "resources/tis/Log.tis";
+
+var _eventHandler = $(head).attributes["data-event-handler"];
+var _viewStateType = $(head).attributes["data-viewstate-type"];
+var _offerEventHandler = "OfferEventHandler";
+var _postFinishOfferEventHandler = "PostFinishOfferEventHandler";
+var _licenseEventHandler = "LicenseEventHandler";
+var _scanningEventHandler = "ScanningEventHandler";
+var _suiteEventHandler = "SuiteEventHandler";
+var _startMenuFolderEventHandler = "StartMenuFolderEventHandler";
+
+var _viewStateLoader = new ViewStateLoader(self, _eventHandler, _viewStateType);
+var _resourceManager;
+//var _log = new Log();
+
+// Only called by BaseEventHandler to inject C# ResourceManager to TIS
+function SetResourceManager(resourceManager) {
+    var eventResult = JSON.parse(resourceManager);
+    _resourceManager = eventResult;
+}
+
+function self.ready() {
+    var senderArgs = GetSenderArgs("Load", _eventHandler);
+
+    if (_eventHandler == _offerEventHandler) {
+        view.ScriptCall(JSON.stringify(senderArgs), "", ScriptCallBack);
+        return;
+    }
+
+    var viewState = _viewStateLoader.GetViewState();
+
+    if (_eventHandler == _scanningEventHandler) {
+        view.ScriptCall(JSON.stringify(senderArgs), JSON.stringify(viewState), ScanningPageCallBack);
+        return;
+    }
+
+    if (_eventHandler == _suiteEventHandler) {
+        view.ScriptCall(JSON.stringify(senderArgs), JSON.stringify(viewState), SuitePageCallBack);
+        return;
+    }
+
+    view.ScriptCall(JSON.stringify(senderArgs), JSON.stringify(viewState), LoadViewStateCallBack);
+
+}
+
+self.on("click", "#btnBack,#btnDecline,#btnAccept,#btnNext,#btnExit,#btnFinish,#btnSkipAll", function () {
+
+    var senderArgs = GetSenderArgs(this.id, _eventHandler);
+
+    var viewState = _viewStateLoader.GetViewState();
+
+    if (_eventHandler == _suiteEventHandler) {
+
+        var OffersViewState = [];
+
+        var placeHolders = self.selectAll("[id^=offer]");
+
+        for (var placeHolder in placeHolders) {
+
+            var checkbox = placeHolder.select("[type=checkbox]");
+
+            if (checkbox != undefined) {
+                var item = { "CheckBox1": checkbox ? { "Checked": checkbox.state.checked, "Visible": checkbox.isVisible } : { "Checked": false, "Visible": false }, "OfferId": checkbox.id, "IsOfferShown": true };
+
+                OffersViewState.push(item);
+            }
+
+        }
+
+        viewState = { "OffersViewState": OffersViewState };
+
+    }
+
+    view.ScriptCall(JSON.stringify(senderArgs), JSON.stringify(viewState), ScriptCallBack);
+});
+
+// Called by OfferEventHandler
+function SetOfferLanguage(newLanguage) {
+    SetTranslateOfferLanguage(newLanguage);
+}
+
+self.on("click", "#btnCancel", function () {
+
+    var senderArgs = GetSenderArgs(this.id, _eventHandler);
+
+    view.ScriptCall(JSON.stringify(senderArgs), "", CancelRequestCallBack);
+
+});
+
+self.on("click", "#btnFolder", function () {
+
+    var folder;
+
+    if (_eventHandler == _startMenuFolderEventHandler) {
+
+        var pathStartMenu = System.path(#USER_APPDATA) + "/Microsoft/Windows/Start Menu/Programs/";
+
+        do {
+
+            // Everytime "view.selectFolder" is called, it prepends "file://" so we have to remove it to compare.
+            // TODO : Refactor TIS MultiLang
+            folder = view.selectFolder(_resourceManager["SelectFolder"], pathStartMenu).urlUnescape().replace("file://", "");
+
+            if (folder.indexOf(pathStartMenu) != -1) {
+                break;
+            }
+            // TODO : Refactor TIS MultiLang
+            view.msgbox(#alert, _resourceManager["ChooseFolder"] + pathStartMenu.replace("/", "\\"), _resourceManager["InvalidPath"]);
+
+        } while (true);
+
+        folder = folder.replace(pathStartMenu, "");
+
+    }
+    else {
+        // TODO : Refactor TIS MultiLang
+        folder = view.selectFolder(_resourceManager["SelectFolder"]).urlUnescape().replace("file://", "");
+    }
+
+    if (folder) {
+        folder = folder.replace("/", "\\");
+        $(#TextBox1).text = folder;
+    }
+
+});
+
+
+self.on("click", "a,#Banner", function () {
+
+    var senderArgs;
+
+    if (this.id == "Banner") {
+        senderArgs = GetSenderArgs("Banner", _eventHandler);
+    } else {
+        // This option needs to be the last condition
+        senderArgs = GetSenderArgs("a", _eventHandler);
+    }
+
+    var viewState = _viewStateLoader.GetViewState();
+    viewState["Controls"]["Hyperlink"]["Href"] = this.attributes["href"];
+
+    view.ScriptCall(JSON.stringify(senderArgs), JSON.stringify(viewState), ScriptCallBack);
+
+});
+
+self.on("change", "#RadioButton1,#RadioButton2", function () {
+
+    if (_eventHandler != _licenseEventHandler)
+        return;
+
+    var senderArgs = GetSenderArgs(this.id, _eventHandler);
+
+    var viewState = _viewStateLoader.GetViewState();
+
+    view.ScriptCall(JSON.stringify(senderArgs), JSON.stringify(viewState), ScriptCallBack);
+
+});
+
+view.root << event closerequest(evt) {
+    // windows X control button => reason = 0 = BY CHROME
+    // caption X control button => reason = 1 = BY CODE
+    // GoNext control button => reason = 2 = BY LOAD
+    if (evt.reason == 0 || evt.reason == 1) {
+
+        evt.cancel = true; //to cancel closing
+
+        var senderArgs;
+
+        if (_eventHandler === _postFinishOfferEventHandler)
+        {
+            senderArgs = GetSenderArgs("DECLINEX", _eventHandler);
+            var viewState = _viewStateLoader.GetViewState();
+            view.ScriptCall(JSON.stringify(senderArgs), JSON.stringify(viewState), ScriptCallBack);
+        }
+        else
+        {
+            senderArgs = GetSenderArgs("CLOSE_REQUEST", _eventHandler);
+            view.ScriptCall(JSON.stringify(senderArgs), "", CancelRequestCallBack);
+        }    
+
+    }
+
+};
+
+function ScriptCallBack(result) {
+
+    var eventResult = JSON.parse(result);
+
+    if (!eventResult.Succeed) {
+        // TODO : Refactor TIS MultiLang
+        view.msgbox(#alert, eventResult.Message, _resourceManager["Error"]);
+    }
+
+}
+
+function LoadViewStateCallBack(result) {
+
+    var eventResult = JSON.parse(result);
+
+    if (!eventResult.Succeed) {
+        // TODO : Refactor TIS MultiLang
+        view.msgbox(#alert, eventResult.Message, _resourceManager["Error"]);
+    }
+
+    _viewStateLoader.LoadViewState(eventResult.ViewState.Controls);
+
+}
+
+function ScanningPageCallBack(result) {
+
+    var eventResult = JSON.parse(result);
+
+    if (!eventResult.Succeed) {
+        // TODO : Refactor TIS MultiLang
+        view.msgbox(#alert, eventResult.Message, _resourceManager["Error"]);
+    }
+
+    _viewStateLoader.LoadViewState(eventResult.ViewState.Controls);
+
+    function increment() {
+        if ($(#ProgressBar1).value >= 100) {
+
+            var senderArgs = GetSenderArgs("GO_NEXT", _eventHandler);
+
+            view.ScriptCall(JSON.stringify(senderArgs), "", LoadViewStateCallBack);
+
+            return;
+        }
+
+        $(#ProgressBar1).value += 1;
+
+        return true;
+    }
+
+    $(#ProgressBar1).timer(5, increment);
+
+}
+
+function SuitePageCallBack(result) {
+
+    var eventResult = JSON.parse(result);
+
+    if (!eventResult.Succeed) {
+        // TODO : Refactor TIS MultiLang
+        view.msgbox(#alert, eventResult.Message, _resourceManager["Error"]);
+    }
+
+    if (eventResult.ViewState["Controls"]["Body1"]["Html"] != null) {
+        $(body).html = eventResult.ViewState["Controls"]["Body1"]["Html"];
+    }
+
+    _viewStateLoader.LoadViewState(eventResult.ViewState.Controls);
+}
+
+
+function CancelRequestCallBack(result) {
+
+    var eventResult = JSON.parse(result);
+
+    if (!eventResult.Succeed) {
+        view.msgbox(#alert, eventResult.Message);
+        return;
+    }
+
+    // TODO : Refactor TIS MultiLang
+    var msgButtons;
+
+    if (eventResult.Option == "NoCancelButton") {
+        msgButtons = [{ id: #yes, text: _resourceManager["Yes"], role: "yes-button" },
+        { id: #no, text: _resourceManager["No"], role: "no-button" }]
+    }
+    else {
+        msgButtons = [{ id: #yes, text: _resourceManager["Yes"], role: "yes-button" },
+        { id: #no, text: _resourceManager["No"], role: "no-button" },
+        { id: #cancel, text: _resourceManager["Cancel"], role: "default-button" }]
+    }
+
+    var msgResult = view.msgbox {
+        icon: self.url("Resources/images/warning48x48.png"),
+            content: eventResult.Message,
+                caption: _resourceManager["Warning"],
+                    buttons: msgButtons
+    };
+
+    var senderArgs;
+
+    if (msgResult == undefined || msgResult === #no || msgResult === #cancel) {
+        senderArgs = GetSenderArgs("CLOSE_CANCELED", _eventHandler);
+    } else {
+        senderArgs = GetSenderArgs("CLOSE", _eventHandler);
+    }
+
+    view.ScriptCall(JSON.stringify(senderArgs), "", ScriptCallBack);
+
+}
+
+function GetSenderArgs(ctrlId, _eventHandler) {
+
+    var actions = {};
+
+    actions["Load"] = "LOAD";
+    actions["btnBack"] = "GO_BACK";
+    actions["btnDecline"] = "DECLINE";
+    actions["btnAccept"] = "ACCEPT";
+    actions["btnNext"] = "GO_NEXT";
+    actions["btnExit"] = "EXIT";
+    actions["btnSkipAll"] = "SKIP_ALL";
+    actions["btnFinish"] = "FINISH";
+    actions["btnCancel"] = "CLOSE_REQUEST";
+    actions["Banner"] = "BANNER_CLICK";
+    actions["a"] = "HYPERLINK_CLICK";
+    actions["GO_NEXT"] = "GO_NEXT";
+    actions["DECLINE"] = "DECLINE";
+    actions["DECLINEX"] = "DECLINEX";
+    actions["CLOSE_CANCELED"] = "CLOSE_CANCELED";
+    actions["CLOSE"] = "CLOSE";
+    actions["CLOSE_REQUEST"] = "CLOSE_REQUEST";
+    actions["RadioButton1"] = "RADIOBUTTONCHANGE";
+    actions["RadioButton2"] = "RADIOBUTTONCHANGE";
+
+    var senderArgs = {
+        "Action": actions[ctrlId],
+        "EventHandler": _eventHandler
+    };
+
+    return senderArgs;
+}
+
+function View_LoadPage(result) {
+    var eventResult = JSON.parse(result);
+
+    if (!eventResult.Succeed) {
+        view.msgbox(#alert, eventResult.Message);
+        return;
+    }
+
+    if (_eventHandler == _offerEventHandler || _eventHandler == "OfferTestEventHandler") {
+        _viewStateLoader.OfferLoadViewState(eventResult.ViewState.Controls);
+        return;
+    }
+    else {
+        _viewStateLoader.LoadViewState(eventResult.ViewState.Controls);
+    }
+}
+
+// TODO : Refactor TIS MultiLang
+function ShowExitRequestWarning(text) {
+    return view.msgbox {
+        icon: self.url("Resources/images/warning48x48.png"),
+            content: text,
+                caption: _resourceManager["Warning"],
+                    buttons: [{ id: #yes, text: _resourceManager["Yes"], role: "yes-button" },
+                    { id: #no, text: _resourceManager["No"], role: "no-button" },
+                    { id: #cancel, text: _resourceManager["Cancel"], role: "default-button" }]
+    };
+}
+
+// TODO : Refactor TIS MultiLang
+function ShowAppEsteemWarning(text) {
+    return view.msgbox {
+        icon: self.url("Resources/images/warning48x48.png"),
+            content: text,
+                caption: _resourceManager["Warning"],
+                    buttons: [{ id: #ok, text: _resourceManager["Ok"], role: "default-button" }]
+    };
+}

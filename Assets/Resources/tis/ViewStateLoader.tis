@@ -1,0 +1,444 @@
+include "resources/tis/Log.tis";
+include "resources/tis/TranslateOfferTemplate.tis";
+
+class ViewStateLoader {
+
+    var _controlFilter;
+    var _types = {};
+    var _self;
+    var _eventHandlerName;
+    var _viewStateType;
+    var _log;
+    var _postFinishOfferEventHandler = "PostFinishOfferEventHandler";
+    var _offerEventHandler = "OfferEventHandler";
+
+    function this(self, eventHandlerName, viewStateType = null){
+
+        _self = self;
+
+        if (eventHandlerName == _postFinishOfferEventHandler) {
+            _viewStateType = "GenericSetup.EventHandlers." + _offerEventHandler + "+ViewState, GenericSetup";
+        } else {
+            _viewStateType = "GenericSetup.EventHandlers." + eventHandlerName + "+ViewState, GenericSetup";
+        }
+        
+        if (viewStateType != null) {
+            _viewStateType = viewStateType;
+        }
+
+        // Is not recommended to filter DIVs, it will offset the html layout
+        _controlFilter = "body[id],h1[id],h2[id],h3[id],h4[id],h5[id],p[id],span[id],button[id],input[id],a[id],img[id],progress[id],div[id],select[id]";
+
+        _types["Dictionary<string, IDOMBase>"] = "System.Collections.Generic.Dictionary`2[[System.String, mscorlib],[GenericSetup.DOM.IDOMBase, GenericSetup]], mscorlib";
+        _types["a"] = "GenericSetup.DOM.DOMHyperlink, GenericSetup";
+        _types["body"] = "GenericSetup.DOM.DOMBody, GenericSetup";
+        _types["button"] = "GenericSetup.DOM.DOMButton, GenericSetup";
+        _types["checkbox"] = "GenericSetup.DOM.DOMCheckBox, GenericSetup";
+        _types["radio"] = "GenericSetup.DOM.DOMRadio, GenericSetup";
+        _types["h1"] = "GenericSetup.DOM.DOMHeading, GenericSetup";
+        _types["h2"] = "GenericSetup.DOM.DOMHeading, GenericSetup";
+        _types["h3"] = "GenericSetup.DOM.DOMHeading, GenericSetup";
+        _types["h4"] = "GenericSetup.DOM.DOMHeading, GenericSetup";
+        _types["h5"] = "GenericSetup.DOM.DOMHeading, GenericSetup";
+        _types["h6"] = "GenericSetup.DOM.DOMHeading, GenericSetup";
+        _types["img"] = "GenericSetup.DOM.DOMImage, GenericSetup";
+        _types["text"] = "GenericSetup.DOM.DOMInputText, GenericSetup";
+        _types["p"] = "GenericSetup.DOM.DOMParagraph, GenericSetup";
+        _types["span"] = "GenericSetup.DOM.DOMSpan, GenericSetup";
+        _types["progress"] = "GenericSetup.DOM.DOMProgress, GenericSetup";
+        _types["div"] = "GenericSetup.DOM.DOMDiv, GenericSetup";
+        _types["select"] = "GenericSetup.DOM.DOMDropdown, GenericSetup";
+
+        _log = new Log();
+    }
+
+    function GetViewState() {
+
+        var viewState = {};
+        viewState["$type"] = _viewStateType;
+
+        try {
+
+            var elements = _self.selectAll(_controlFilter);
+
+            var controls = {};
+            controls["$type"] = _types["Dictionary<string, IDOMBase>"];
+
+            var properties;
+
+            for (var control in elements) {
+
+                properties = {};
+                properties["$type"] = _types[control.tag];
+
+                if (control.attributes["class"] != null) {
+                    properties["Class"] = control.attributes["class"];
+                }
+
+                if (control.tag == "body") {
+
+                    properties["$type"] = _types[control.tag];
+                    properties["Html"] = control.html;
+
+                } else if (control.tag == "a") {
+
+                    properties["$type"] = _types[control.tag];
+                    properties["Href"] = control.attributes["href"];
+                    properties["Clicked"] = false;
+
+                } else if (control.tag == "h1" ||
+                    control.tag == "h2" ||
+                    control.tag == "h3" ||
+                    control.tag == "h4" ||
+                    control.tag == "h5" ||
+                    control.tag == "h6" ||
+                    control.tag == "p" ||
+                    control.tag == "span" ||
+                    control.tag == "div") {
+
+                    properties["$type"] = _types[control.tag];
+                    properties["Text"] = control.text;
+                    properties["Html"] = control.html;
+
+                } else if (control.tag == "img") {
+
+                    if (control.attributes["src"] != undefined) {
+                        properties["Source"] = control.attributes["src"];
+                    }
+
+
+                } else if (control.tag == "progress") {
+
+                    properties["$type"] = _types[control.tag];
+                    properties["Value"] = control.value.toInteger();
+                    properties["Busy"] = true;
+
+                } else if (control.tag == "button" || control.tag == "input") {
+
+                    properties["$type"] = _types[control.@["type"]];
+                    properties["Visible"] = control.isVisible;
+
+                    if (control.@["type"] == "checkbox" || control.@["type"] == "radio") {
+
+                        properties["Checked"] = control.state.checked;
+                        properties["Value"] = control.text;
+
+                        if (control.attributes["offercheckedcommandline"] != undefined) {
+                            properties["OfferCheckedCommandLine"] = control.attributes["offercheckedcommandline"];
+                        }
+                        if (control.attributes["offeruncheckedcommandline"] != undefined) {
+                            properties["OfferUncheckedCommandLine"] = control.attributes["offeruncheckedcommandline"];
+                        }
+
+                        if (control.attributes["carriercheckedcommandline"] != undefined) {
+                            properties["CarrierCheckedCommandLine"] = control.attributes["carriercheckedcommandline"];
+                        }
+                        if (control.attributes["carrieruncheckedcommandline"] != undefined) {
+                            properties["CarrierUncheckedCommandLine"] = control.attributes["carrieruncheckedcommandline"];
+                        }
+                        
+                        if (control.attributes["offercheckedappendtodownloadurl"] != undefined) {
+                            properties["OfferCheckedAppendToDownloadUrl"] = control.attributes["offercheckedappendtodownloadurl"];
+                        }
+                        if (control.attributes["offeruncheckedappendtodownloadurl"] != undefined) {
+                            properties["OfferUncheckedAppendToDownloadUrl"] = control.attributes["offeruncheckedappendtodownloadurl"];
+                        }
+
+                    } else if (control.@["type"] == "text") {
+
+                        properties["Text"] = control.text;
+
+                    } else if (control.@["type"] == "button") {
+
+                        properties["Disabled"] = control.state.disabled;
+                        properties["Value"] = control.text;
+                    }
+                }
+                else if (control.tag == "select") {
+                    properties["Value"] = control.value;
+                }
+
+                controls[control.id] = properties;
+
+            }
+
+            //_log.Info("Controls: " + DictionaryToString(controls)); //Debug
+
+            //_log.Info("Controls: " + JSON.stringify(controls)); //Debug
+
+            //this custom Hyperlink control
+            //is to handle link clic events
+            properties = {};
+            properties["$type"] = _types["a"];
+            properties["Href"] = null;
+            properties["Clicked"] = false;
+            controls["Hyperlink"] = properties;
+
+            viewState["Controls"] = controls;
+
+            //_log.Info("ViewState: " + viewState); //Debug
+
+        } catch (e) {
+
+            //view.msgbox(e); //Debug
+            _log.Info(e);
+
+        }
+
+        //view.msgbox(e); //Debug
+        //_log.Info(e);
+        return viewState;
+
+    }
+
+    function TranslateInjectedOffer(bodyHtml) {
+
+        try {
+            var clearNewLines = bodyHtml.replace(/[\n\r]+/g, "");
+
+            var regexp = /\[\{.*\]/g;
+            var regexpMatches = regexp.exec(clearNewLines);
+
+            var offerResourcesString = regexpMatches[0];
+            var offerResources = JSON.parse(offerResourcesString);
+
+            var translatedHtml = TranslateOfferElementsWithHTML(offerResources, bodyHtml);
+
+            return translatedHtml;
+        }
+        catch (err) {
+            //_log.Info(err);
+            throw new Error("Couldn't translate Offer. | " + err);
+        }
+    }
+
+    function SetViewStateControlProperties(controls) {
+        try {
+
+            var elements = _self.selectAll(_controlFilter);
+
+            for (var control in elements) {
+
+                var properties = controls[control.id];
+
+                if (properties == null) {
+                    continue;
+                }
+
+                if (properties["class"] != null) {
+                    control.attributes["class"] = properties["class"];
+                }
+
+                if (control.tag == "body") {
+
+                    //$body is already loaded
+
+                } else if (control.tag == "a") {
+
+                    control.attributes["href"] = properties["Href"];
+
+                } else if (control.tag == "h1" ||
+                    control.tag == "h2" ||
+                    control.tag == "h3" ||
+                    control.tag == "h4" ||
+                    control.tag == "h5" ||
+                    control.tag == "h6" ||
+                    control.tag == "p" ||
+                    control.tag == "span") {
+
+                    /* Text is a read only property */
+                    //control.text = properties["Text"];
+                    if (properties["Html"] != "") {
+                        control.html = properties["Html"];
+                    }
+
+
+                } else if (control.tag == "img") {
+
+                    if (control.attributes["src"] == undefined) {
+                        control.attributes["src"] = true;
+                    }
+
+                    control.attributes["src"] = properties["Source"];
+
+                } else if (control.tag == "progress") {
+
+                    if (properties["Value"].toInteger() > 0) {
+                        if (control.attributes["max"] == undefined) {
+                            control.attributes["max"] = true;
+                            control.attributes["max"] = 100;
+                            control.state.busy = false;
+                        }
+
+                        control.value = properties["Value"].toInteger();
+                    } else {
+                        control.state.busy = true;
+                    }
+
+                    //_log.Info("Load: Busy " + control.state.busy + " Value " + control.value + " Max " + control.attributes["max"]);
+
+                } else if (control.tag == "button" || control.tag == "input") {
+
+                    //control.isVisible = properties["Visible"];
+
+                    if (control.@["type"] == "checkbox" || control.@["type"] == "radio") {
+
+                        control.state.checked = properties["Checked"];
+                        control.text = properties["Value"];
+
+                        if (control.attributes["offercheckedcommandline"] == undefined) {
+                            control.attributes["offercheckedcommandline"] = true;
+                        }
+
+                        control.attributes["offercheckedcommandline"] = properties["OfferCheckedCommandLine"];
+
+                        if (control.attributes["offeruncheckedcommandline"] == undefined) {
+                            control.attributes["offeruncheckedcommandline"] = true;
+                        }
+
+                        control.attributes["offeruncheckedcommandline"] = properties["OfferUncheckedCommandLine"];
+
+                        if (control.attributes["carriercheckedcommandline"] == undefined) {
+                            control.attributes["carriercheckedcommandline"] = true;
+                        }
+
+                        control.attributes["carriercheckedcommandline"] = properties["CarrierCheckedCommandLine"];
+
+                        if (control.attributes["carrieruncheckedcommandline"] == undefined) {
+                            control.attributes["carrieruncheckedcommandline"] = true;
+                        }
+
+                        control.attributes["carrieruncheckedcommandline"] = properties["CarrierUncheckedCommandLine"];
+
+                    } else if (control.@["type"] == "text") {
+
+                        control.text = properties["Text"];
+
+                    } else if (control.@["type"] == "button") {
+
+                        control.state.disabled = properties["Disabled"];
+                        control.text = properties["Value"];
+
+                    }
+
+
+                }
+                else if (control.tag == "select") {
+                    properties["Value"] = control.value;
+                }
+
+            }
+        }
+        catch (err) {
+            //_log.Info(err);
+        }
+    }
+
+    function LoadViewState(controls) {
+
+        try {
+
+            if (controls.length == 0) {
+                return;
+            }
+
+            // Load offer template first and then offer template controls
+            var body = _self.select("body[id]");
+
+            if (body != null) {
+                body.html = controls[body.id]["Html"];
+            }
+
+            SetViewStateControlProperties(controls);
+
+        } catch (e) {
+
+            //view.msgbox(e); //Debug
+            //_log.Info(e);
+
+        }
+
+    }
+
+    function IsOfferMultiLanguage(bodyHtml) {
+        try {
+
+            var regexp = /(var resources =)/g;
+            if ((bodyHtml.search(regexp) != -1)) {
+                return true;
+            }
+            return false;
+        }
+        catch (err) {
+            //_log.Info(err);
+            return false;
+
+        }
+    }
+
+    function OfferLoadViewState(controls) {
+
+        try {
+
+            if (controls.length == 0) {
+                return;
+            }
+
+            // Load offer template first and then offer template controls
+            var body = _self.select("body[id]");
+            var offerHtml = controls[body.id]["Html"];
+
+            // _log.Info(offerHtml); // Debug
+
+            if (body != null) {
+
+                try {
+                    if (IsOfferMultiLanguage(offerHtml)) {
+                        var translatedOfferHtml = TranslateInjectedOffer(offerHtml);
+
+                        body.html = translatedOfferHtml;
+                    } else {
+                        body.html = offerHtml;
+                    }
+                } catch (err) {
+                    //_log.Info(err);
+                    body.html = controls[body.id]["Html"];
+                }
+
+            }
+
+            SetViewStateControlProperties(controls);
+
+        } catch (e) {
+
+            //view.msgbox(e); //Debug
+            //_log.Info(e);
+
+        }
+
+    }
+
+    //This function is for debugging purpose
+    //to verify the values of controls / properties objects
+    //in case of JSON.stringify failes
+    /*
+    function DictionaryToString(obj){
+
+        var str = "{\n";
+        
+        if( obj instanceof Object ) {
+
+            for (var (key, value) in obj) {
+                
+                if( value instanceof Object ) {
+                    str += "\"" + key + "\"" +" : ";
+                    str += DictionaryToString(value) + ",\n";
+                } else {
+                    str += "\"" + key + "\"" +" : " + "\"" + value + "\"" + ", " + "\n";
+                }
+            }
+        }
+        return str + "}";
+    }
+    */
+}
